@@ -3,14 +3,26 @@ set -euo pipefail
 
 sys_tools_restart_now() {
   local root_dir="$1"
-  ui_info "Перезапускаю sys-tools, чтобы применились обновления..."
+
+  ui_info "Применяю обновления: делаю перезапуск sys-tools..."
   ui_pause
 
+  # Сначала пытаемся перезапуститься тем же entrypoint, которым запустились (если передан из toolbox.sh)
   if [[ -n "${SYS_TOOLS_ENTRY:-}" && -f "${SYS_TOOLS_ENTRY}" ]]; then
     exec bash "${SYS_TOOLS_ENTRY}"
   fi
 
+  # Фолбэк — прямой запуск toolbox.sh
   exec bash "${root_dir}/toolbox.sh"
+}
+
+sys_tools_post_update_fixups() {
+  local root_dir="$1"
+
+  # После pull у тебя может слетать +x, а sys-tools запускается как исполняемый файл через симлинк
+  sudo chmod +x "${root_dir}/toolbox.sh" 2>/dev/null || true
+
+  # Можно добавить сюда любые будущие fixups (например миграции структуры)
 }
 
 sys_tools_update_menu() {
@@ -31,7 +43,7 @@ sys_tools_update_menu() {
   dirty="$(cd "$root_dir" && git status --porcelain || true)"
 
   if [[ -n "$dirty" ]]; then
-    ui_warn "Есть локальные изменения. git pull --rebase не выполнится."
+    ui_warn "Есть локальные изменения. Обычный git pull --rebase не выполнится."
     echo
     ui_info "Варианты:"
     echo "1) Stash изменения → pull --rebase → stash pop (сохранить изменения)"
@@ -43,27 +55,34 @@ sys_tools_update_menu() {
 
     case "${c:-}" in
       1)
-        ui_info "Делаю stash..."
+        ui_info "Шаг 1/3: stash..."
         ( cd "$root_dir" && git stash push -m "sys-tools auto-stash before update" )
-        ui_info "Делаю pull --rebase..."
+        ui_info "Шаг 2/3: pull --rebase..."
         ( cd "$root_dir" && git pull --rebase )
-        ui_info "Возвращаю stash..."
+        ui_info "Шаг 3/3: stash pop..."
         ( cd "$root_dir" && git stash pop ) || true
-        ui_ok "Готово (если были конфликты — проверь git status)."
-        ui_pause
-        return 0
+
+        sys_tools_post_update_fixups "$root_dir"
+        ui_ok "Обновлено. (Если были конфликты — проверь git status.)"
+        sys_tools_restart_now "$root_dir"
         ;;
       2)
         ui_warn "Это удалит ВСЕ локальные изменения и неотслеживаемые файлы в ${root_dir}."
         ui_confirm "Точно продолжить?" "N" || { ui_info "Отменено."; ui_pause; return 0; }
+
+        ui_info "Шаг 1/3: fetch..."
         ( cd "$root_dir" && git fetch --all )
+        ui_info "Шаг 2/3: reset --hard origin/main..."
         ( cd "$root_dir" && git reset --hard origin/main )
+        ui_info "Шаг 3/3: clean -fd..."
         ( cd "$root_dir" && git clean -fd )
+
+        ui_info "pull --rebase..."
         ( cd "$root_dir" && git pull --rebase )
+
+        sys_tools_post_update_fixups "$root_dir"
         ui_ok "Сброшено и обновлено."
         sys_tools_restart_now "$root_dir"
-        ui_pause
-        return 0
         ;;
       0)
         ui_info "Отменено."
@@ -80,9 +99,11 @@ sys_tools_update_menu() {
 
   if ui_confirm "Сделать git pull (обновить)?" "Y"; then
     ( cd "$root_dir" && git pull --rebase )
+    sys_tools_post_update_fixups "$root_dir"
     ui_ok "Обновлено."
+    sys_tools_restart_now "$root_dir"
   else
     ui_info "Отменено."
+    ui_pause
   fi
-  ui_pause
 }
