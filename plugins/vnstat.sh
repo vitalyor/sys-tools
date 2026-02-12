@@ -33,15 +33,16 @@ vnstat_init_iface() {
   iface="$(ui_input "Какой интерфейс учитывать в vnStat?" "$def_if")"
 
   local version
-  version="$(vnstat --version | head -n1 | awk '{print $2}')"
+  version="$(vnstat --version 2>/dev/null | head -n1 | awk '{print $2}' || true)"
+  [[ -z "$version" ]] && version="unknown"
+  ui_info "Версия vnStat: ${version}"
 
-  ui_info "Версия vnStat: $version"
-
+  # vnStat 2.x: вместо -u используется --add
   if vnstat --help 2>&1 | grep -q -- '--add'; then
-    ui_info "Использую новый синтаксис: vnstat --add -i ${iface}"
+    ui_info "Инициализация (vnStat 2.x): vnstat --add -i ${iface}"
     sudo vnstat --add -i "$iface" || true
   else
-    ui_info "Использую старый синтаксис: vnstat -u -i ${iface}"
+    ui_info "Инициализация (vnStat 1.x): vnstat -u -i ${iface}"
     sudo vnstat -u -i "$iface" || true
   fi
 
@@ -50,7 +51,6 @@ vnstat_init_iface() {
   ui_ok "Инициализация завершена."
   echo
   vnstat --oneline 2>/dev/null || true
-
   ui_pause
 }
 
