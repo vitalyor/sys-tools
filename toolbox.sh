@@ -82,6 +82,7 @@ main_menu() {
 
 main() {
   sys_need_bash
+  sys_tools_auto_update_on_start "${ROOT_DIR}"
   main_menu
 }
 

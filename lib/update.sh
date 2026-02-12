@@ -25,6 +25,57 @@ sys_tools_post_update_fixups() {
   # Можно добавить сюда любые будущие fixups (например миграции структуры)
 }
 
+sys_tools_auto_update_on_start() {
+  local root_dir="$1"
+  local dirty="" local_rev="" remote_rev="" base_rev=""
+
+  [[ "${SYS_TOOLS_AUTO_UPDATE:-1}" == "0" ]] && return 0
+  [[ -d "${root_dir}/.git" ]] || return 0
+  sys_cmd_exists git || return 0
+
+  dirty="$(cd "$root_dir" && git status --porcelain 2>/dev/null || true)"
+  if [[ -n "$dirty" ]]; then
+    ui_warn "Auto-update: есть локальные изменения, пропускаю автообновление."
+    return 0
+  fi
+
+  if ! (cd "$root_dir" && git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1); then
+    ui_warn "Auto-update: для текущей ветки не настроен upstream, пропускаю."
+    return 0
+  fi
+
+  ui_info "Auto-update: проверяю обновления..."
+  if ! (cd "$root_dir" && git fetch --quiet --prune); then
+    ui_warn "Auto-update: не удалось получить обновления, продолжаю без них."
+    return 0
+  fi
+
+  local_rev="$(cd "$root_dir" && git rev-parse @ 2>/dev/null || true)"
+  remote_rev="$(cd "$root_dir" && git rev-parse @{u} 2>/dev/null || true)"
+  base_rev="$(cd "$root_dir" && git merge-base @ @{u} 2>/dev/null || true)"
+
+  if [[ -z "$local_rev" || -z "$remote_rev" || -z "$base_rev" ]]; then
+    ui_warn "Auto-update: не удалось определить состояние ветки, продолжаю без обновления."
+    return 0
+  fi
+
+  # behind: локальная ветка отстаёт, можно безопасно делать pull --rebase
+  if [[ "$local_rev" == "$base_rev" && "$local_rev" != "$remote_rev" ]]; then
+    ui_info "Auto-update: найдены обновления, применяю..."
+    if (cd "$root_dir" && git pull --rebase); then
+      sys_tools_post_update_fixups "$root_dir"
+      ui_ok "Auto-update: обновление применено, перезапуск."
+      sys_tools_restart_now "$root_dir"
+    fi
+    ui_warn "Auto-update: git pull не выполнен. Можно обновить вручную через пункт 8."
+    return 0
+  fi
+
+  if [[ "$local_rev" != "$remote_rev" && "$remote_rev" != "$base_rev" ]]; then
+    ui_warn "Auto-update: ветка разошлась с upstream, пропускаю автообновление."
+  fi
+}
+
 sys_tools_update_menu() {
   local root_dir="$1"
 
