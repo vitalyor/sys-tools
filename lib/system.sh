@@ -12,10 +12,7 @@ sys_cmd_exists() { command -v "$1" >/dev/null 2>&1; }
 
 sys_need_sudo() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-    if ! sudo -n true 2>/dev/null; then
-      # интерактивный sudo ок, просто предупреждение
-      return 0
-    fi
+    sudo -n true 2>/dev/null || true
   fi
 }
 
@@ -34,13 +31,12 @@ sys_public_ip() {
 }
 
 sys_default_iface() {
-  # best-effort default route iface
   ip route 2>/dev/null | awk '/default/ {print $5; exit}' || true
 }
 
 sys_ensure_apt() {
   if ! sys_cmd_exists apt-get; then
-    ui_fail "apt-get не найден. Этот инструмент рассчитан на Debian/Ubuntu."
+    ui_fail "apt-get не найден. Этот инструмент рассчитан на Ubuntu/Debian."
     return 1
   fi
   return 0
@@ -67,7 +63,6 @@ sys_backup_file() {
 }
 
 sys_detect_ssh_unit() {
-  # чаще всего ssh, иногда sshd
   if systemctl list-unit-files 2>/dev/null | grep -q '^ssh\.service'; then echo "ssh"; return; fi
   if systemctl list-unit-files 2>/dev/null | grep -q '^sshd\.service'; then echo "sshd"; return; fi
   echo "ssh"
