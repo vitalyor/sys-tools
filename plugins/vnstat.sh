@@ -4,11 +4,16 @@ set -euo pipefail
 vnstat_installed() { sys_cmd_exists vnstat; }
 
 vnstat_version() {
-  vnstat --version 2>/dev/null | head -n1 | awk '{print $2}' || echo "0.0"
+  vnstat --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -n1 || echo "0.0"
 }
 
 vnstat_major() {
   vnstat_version | cut -d. -f1 | tr -cd '0-9' || echo "0"
+}
+
+vnstat_iface_exists() {
+  local iface="$1"
+  vnstat --iflist 2>/dev/null | tr ' ' '\n' | grep -xq "$iface"
 }
 
 vnstat_install() {
@@ -46,19 +51,23 @@ vnstat_init_iface() {
   local ver maj
   ver="$(vnstat_version)"
   maj="$(vnstat_major)"
-
   ui_info "Версия vnStat: ${ver}"
 
-  if [[ "$maj" =~ ^[0-9]+$ ]] && (( maj >= 2 )); then
-    ui_info "Инициализация (vnStat 2.x): vnstat --add -i ${iface}"
-    # если интерфейс уже есть — vnstat вернёт ошибку, это не критично
-    sudo vnstat --add -i "$iface" || true
+  sudo systemctl enable --now vnstat >/dev/null 2>&1 || true
+
+  if vnstat_iface_exists "$iface"; then
+    ui_ok "Интерфейс ${iface} уже есть в базе vnStat (ничего не добавляю)."
   else
-    ui_info "Инициализация (vnStat 1.x): vnstat -u -i ${iface}"
-    sudo vnstat -u -i "$iface" || true
+    if [[ "$maj" =~ ^[0-9]+$ ]] && (( maj >= 2 )); then
+      ui_info "Добавляю интерфейс (vnStat 2.x): vnstat --add -i ${iface}"
+      sudo vnstat --add -i "$iface"
+    else
+      ui_info "Добавляю интерфейс (vnStat 1.x): vnstat -u -i ${iface}"
+      sudo vnstat -u -i "$iface"
+    fi
+    ui_ok "Интерфейс добавлен: ${iface}"
   fi
 
-  sudo systemctl enable --now vnstat >/dev/null 2>&1 || true
   sudo systemctl restart vnstat >/dev/null 2>&1 || true
 
   ui_ok "Инициализация завершена."
