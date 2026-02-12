@@ -5,13 +5,13 @@ REPO_DEFAULT="https://github.com/vitalyor/sys-tools.git"
 INSTALL_DIR="/opt/sys-tools"
 BIN_LINK="/usr/local/bin/sys-tools"
 
+cmd_exists() { command -v "$1" >/dev/null 2>&1; }
+
 need_sudo() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
     sudo -n true 2>/dev/null || true
   fi
 }
-
-cmd_exists() { command -v "$1" >/dev/null 2>&1; }
 
 apt_install() {
   sudo apt-get update -y
@@ -21,12 +21,13 @@ apt_install() {
 main() {
   need_sudo
 
+  if ! cmd_exists apt-get; then
+    echo "apt-get not found. This installer is for Ubuntu/Debian." >&2
+    exit 1
+  fi
+
   if ! cmd_exists git; then
-    echo "[*] Installing git..."
-    if ! cmd_exists apt-get; then
-      echo "apt-get not found. Install git manually." >&2
-      exit 1
-    fi
+    echo "[*] Installing git + curl..."
     apt_install git curl
   fi
 
