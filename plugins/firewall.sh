@@ -110,25 +110,44 @@ plugin_firewall_menu() {
     ui_clear
     ui_h1 "Меню: Firewall / Ports"
     echo "1) Установить ufw"
-    echo "2) Статус ufw + слушающие порты"
-    echo "3) Включить ufw (deny incoming, allow outgoing, allow ssh)"
-    echo "4) Добавить allow правило (порт/протокол)"
-    echo "5) Удалить правило по номеру"
-    echo "6) Показать слушающие порты (ss)"
-    echo "7) SSH audit: топ атакующих IP"
+    echo "2) Статус ufw"
+    echo "3) Показать правила ufw (с номерами)"
+    echo "4) Включить ufw (deny incoming, allow outgoing, allow ssh)"
+    echo "5) Добавить allow правило (порт/протокол)"
+    echo "6) Удалить правило по номеру"
+    echo "7) Показать слушающие порты (ss)"
+    echo "8) SSH audit: топ атакующих IP"
     echo "0) Назад"
     echo
     read -rp "Выбор: " c || true
+
     case "${c:-}" in
-      1) firewall_install_ufw ;;
-      2) firewall_status ;;
-      3) firewall_enable_basic ;;
-      4) firewall_allow_rule ;;
-      5) firewall_delete_rule ;;
-      6) firewall_listening_ports ;;
-      7) ssh_audit_top_ips ;;
+      1) fw_install ;;
+      2) fw_status ;;
+      3) fw_show_rules ;;
+      4) fw_enable_basic ;;
+      5) fw_add_rule ;;
+      6) fw_delete_rule ;;
+      7) fw_list_ports ;;
+      8) fw_ssh_audit ;;
       0) return 0 ;;
       *) ui_warn "Неверный выбор."; ui_pause ;;
     esac
   done
+}
+
+fw_show_rules() {
+  ui_h1 "UFW — правила (с номерами)"
+  if ! sys_cmd_exists ufw; then
+    ui_warn "ufw не установлен."
+    ui_pause
+    return 0
+  fi
+
+  echo
+  sudo ufw status verbose || true
+  echo
+  sudo ufw status numbered || true
+
+  ui_pause
 }
