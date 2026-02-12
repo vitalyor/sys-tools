@@ -61,6 +61,26 @@ rn_require_free_port_or_abort() {
 
 rn_get_server_ip() { sys_public_ip; }
 
+rn_read_env_value() {
+  local env_file="$1"
+  local key="$2"
+  if ! sudo test -r "$env_file" 2>/dev/null; then
+    echo ""
+    return 0
+  fi
+  sudo awk -F= -v k="$key" '$1==k {print substr($0, index($0, "=")+1); exit}' "$env_file" 2>/dev/null || true
+}
+
+rn_mask_secret() {
+  local v="$1"
+  local len="${#v}"
+  if (( len <= 6 )); then
+    echo "***"
+  else
+    printf "%s***%s\n" "${v:0:3}" "${v: -2}"
+  fi
+}
+
 # --------------------------
 # Docker install (Ubuntu 22/24)
 # --------------------------
@@ -251,24 +271,58 @@ rn_node_install_flow() {
 
   rn_install_docker
 
-  local node_port
-  node_port="$(ui_input "NODE_PORT (порт API ноды на хосте)" "$RN_DEFAULT_NODE_PORT")"
+  local node_env_file="${RN_NODE_DIR}/.env"
+  local existing_node_port="" existing_secret_key=""
+  local node_port="" secret_key="" install_xray="false"
+  local keep_existing_port="false"
+
+  existing_node_port="$(rn_read_env_value "$node_env_file" "NODE_PORT")"
+  existing_secret_key="$(rn_read_env_value "$node_env_file" "SECRET_KEY")"
+
+  if [[ -n "${existing_node_port// }" ]]; then
+    ui_info "Найден текущий NODE_PORT: ${existing_node_port}"
+    if ui_confirm "Оставить текущий NODE_PORT?" "Y"; then
+      node_port="$existing_node_port"
+      keep_existing_port="true"
+    else
+      node_port="$(ui_input "NODE_PORT (порт API ноды на хосте)" "${existing_node_port}")"
+    fi
+  else
+    node_port="$(ui_input "NODE_PORT (порт API ноды на хосте)" "$RN_DEFAULT_NODE_PORT")"
+  fi
+
   if ! [[ "$node_port" =~ ^[0-9]+$ ]] || (( node_port < 1 || node_port > 65535 )); then
     ui_fail "Некорректный порт: $node_port"
     ui_pause
     return 1
   fi
 
-  if ! rn_require_free_port_or_abort "$node_port" "NODE_PORT (API ноды)"; then
+  if [[ "$keep_existing_port" == "false" ]] && ! rn_require_free_port_or_abort "$node_port" "NODE_PORT (API ноды)"; then
     ui_pause
     return 1
   fi
 
-  local secret_key
-  secret_key="$(ui_input "SECRET_KEY (ключ ноды)" "")"
+  if [[ -n "${existing_secret_key// }" ]]; then
+    ui_info "Найден текущий SECRET_KEY: $(rn_mask_secret "$existing_secret_key")"
+    if ui_confirm "Оставить текущий SECRET_KEY?" "Y"; then
+      secret_key="$existing_secret_key"
+    else
+      secret_key="$(ui_input "SECRET_KEY (ключ ноды)" "")"
+    fi
+  else
+    secret_key="$(ui_input "SECRET_KEY (ключ ноды)" "")"
+  fi
+
   [[ -z "${secret_key// }" ]] && { ui_fail "SECRET_KEY пустой — так нельзя."; ui_pause; return 1; }
 
-  local install_xray="false"
+  if sudo test -f "${RN_NODE_DIR}/docker-compose.yml" 2>/dev/null; then
+    if sudo grep -q "${RN_DATA_DIR}/xray:/usr/local/bin/xray" "${RN_NODE_DIR}/docker-compose.yml" 2>/dev/null; then
+      if ui_confirm "В текущем compose уже включено монтирование Xray. Оставить так?" "Y"; then
+        install_xray="true"
+      fi
+    fi
+  fi
+
   if ui_confirm "Установить Xray-core на хост (для монтирования в контейнер)?" "Y"; then
     if rn_install_xray_core; then
       install_xray="true"
@@ -425,19 +479,47 @@ rn_caddy_install_flow() {
 
   rn_install_docker
 
-  local domain
-  domain="$(ui_input "Домен (совпадает с realitySettings.serverNames)" "")"
+  local caddy_env_file="${RN_CADDY_DIR}/.env"
+  local existing_domain="" existing_self_port="" existing_cf_token=""
+  local domain="" self_port="" choice="" use_wildcard="false" cf_token=""
+  local keep_existing_port="false"
+
+  existing_domain="$(rn_read_env_value "$caddy_env_file" "SELF_STEAL_DOMAIN")"
+  existing_self_port="$(rn_read_env_value "$caddy_env_file" "SELF_STEAL_PORT")"
+  existing_cf_token="$(rn_read_env_value "$caddy_env_file" "CLOUDFLARE_API_TOKEN")"
+
+  if [[ -n "${existing_domain// }" ]]; then
+    ui_info "Найден текущий домен: ${existing_domain}"
+    if ui_confirm "Оставить текущий домен?" "Y"; then
+      domain="$existing_domain"
+    else
+      domain="$(ui_input "Домен (совпадает с realitySettings.serverNames)" "${existing_domain}")"
+    fi
+  else
+    domain="$(ui_input "Домен (совпадает с realitySettings.serverNames)" "")"
+  fi
+
   [[ -z "${domain// }" ]] && { ui_fail "Домен пустой."; ui_pause; return 1; }
 
-  local self_port
-  self_port="$(ui_input "SELF_STEAL_PORT (порт Caddy на хосте)" "$RN_DEFAULT_SELFSTEAL_PORT")"
+  if [[ -n "${existing_self_port// }" ]]; then
+    ui_info "Найден текущий SELF_STEAL_PORT: ${existing_self_port}"
+    if ui_confirm "Оставить текущий SELF_STEAL_PORT?" "Y"; then
+      self_port="$existing_self_port"
+      keep_existing_port="true"
+    else
+      self_port="$(ui_input "SELF_STEAL_PORT (порт Caddy на хосте)" "${existing_self_port}")"
+    fi
+  else
+    self_port="$(ui_input "SELF_STEAL_PORT (порт Caddy на хосте)" "$RN_DEFAULT_SELFSTEAL_PORT")"
+  fi
+
   if ! [[ "$self_port" =~ ^[0-9]+$ ]] || (( self_port < 1 || self_port > 65535 )); then
     ui_fail "Некорректный порт: $self_port"
     ui_pause
     return 1
   fi
 
-  if ! rn_require_free_port_or_abort "$self_port" "SELF_STEAL_PORT (Caddy selfsteal)"; then
+  if [[ "$keep_existing_port" == "false" ]] && ! rn_require_free_port_or_abort "$self_port" "SELF_STEAL_PORT (Caddy selfsteal)"; then
     ui_pause
     return 1
   fi
@@ -454,24 +536,148 @@ rn_caddy_install_flow() {
   ui_info "Тип сертификата:"
   echo "1) Обычный (HTTP-01)"
   echo "2) Wildcard (DNS-01 через Cloudflare)"
-  local choice
   choice="$(ui_input "Выбор 1/2" "1")"
 
-  local use_wildcard="false"
-  local cf_token=""
   if [[ "$choice" == "2" ]]; then
     use_wildcard="true"
-    cf_token="$(ui_input "Cloudflare API Token (Zone Read + DNS Edit)" "")"
+    if [[ -n "${existing_cf_token// }" ]]; then
+      ui_info "Найден текущий Cloudflare API Token: $(rn_mask_secret "$existing_cf_token")"
+      if ui_confirm "Оставить текущий Cloudflare API Token?" "Y"; then
+        cf_token="$existing_cf_token"
+      else
+        cf_token="$(ui_input "Cloudflare API Token (Zone Read + DNS Edit)" "")"
+      fi
+    else
+      cf_token="$(ui_input "Cloudflare API Token (Zone Read + DNS Edit)" "")"
+    fi
     [[ -z "${cf_token// }" ]] && { ui_fail "Cloudflare token пустой."; ui_pause; return 1; }
   fi
 
-  # шаблон (сейчас минимальный, позже расширим)
-  local _tmpl
-  _tmpl="$(ui_input "Шаблон selfsteal (пока игнорируется, будет минимальный)" "$RN_DEFAULT_TEMPLATE_FOLDER")"
+  ui_info "Шаблон selfsteal: используется минимальный встроенный."
   rn_template_prepare
 
   rn_caddy_write_compose_and_caddyfile "$domain" "$self_port" "$use_wildcard" "$cf_token"
   rn_caddy_up
+}
+
+rn_apply_network_tuning() {
+  ui_h1 "RemnaNode — сетевые настройки (BBR/TCP/лимиты)"
+  sys_need_sudo
+
+  ui_confirm "Применить оптимизацию сетевых настроек (BBR, TCP tuning, лимиты)?" "N" || { ui_info "Отменено."; ui_pause; return 0; }
+
+  local sysctl_file="/etc/sysctl.d/99-remnawave-tuning.conf"
+  local limits_file="/etc/security/limits.d/99-remnawave.conf"
+  local systemd_conf_dir="/etc/systemd/system.conf.d"
+  local systemd_conf_file="${systemd_conf_dir}/99-remnawave.conf"
+
+  if sudo test -f "$sysctl_file" 2>/dev/null; then
+    ui_warn "Файл уже существует: ${sysctl_file}"
+    ui_confirm "Перезаписать его?" "N" || { ui_info "Сетевые настройки не изменены."; ui_pause; return 0; }
+  fi
+
+  ui_info "Проверка поддержки BBR..."
+  if ! grep -q "tcp_bbr" /proc/modules 2>/dev/null; then
+    sudo modprobe tcp_bbr 2>/dev/null || true
+  fi
+  if lsmod | grep -q "tcp_bbr" 2>/dev/null; then
+    ui_ok "Модуль BBR загружен."
+  else
+    ui_warn "BBR может быть недоступен на этом ядре."
+  fi
+
+  ui_info "Создаю ${sysctl_file}..."
+  sudo tee "$sysctl_file" >/dev/null <<'EOF'
+# Remnawave Network Tuning Configuration
+
+# IPv6 (disabled)
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6 = 1
+
+# IPv4 routing and anti-spoofing
+net.ipv4.ip_forward = 1
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.default.rp_filter = 1
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.default.accept_source_route = 0
+
+# TCP tuning and BBR
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.tcp_max_tw_buckets = 262144
+net.ipv4.tcp_max_syn_backlog = 8192
+net.core.somaxconn = 8192
+
+# TCP keepalive
+net.ipv4.tcp_keepalive_time = 300
+net.ipv4.tcp_keepalive_intvl = 15
+net.ipv4.tcp_keepalive_probes = 5
+net.ipv4.tcp_fin_timeout = 15
+
+# Socket buffers (16 MB)
+net.core.rmem_max = 16777216
+net.core.wmem_max = 16777216
+net.ipv4.tcp_rmem = 4096 87380 16777216
+net.ipv4.tcp_wmem = 4096 65536 16777216
+
+# Security
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv4.tcp_syncookies = 1
+
+# System limits
+fs.file-max = 2097152
+vm.swappiness = 10
+vm.overcommit_memory = 1
+EOF
+  ui_ok "Конфигурация создана: ${sysctl_file}"
+
+  ui_info "Применяю sysctl..."
+  if sudo sysctl -p "$sysctl_file" >/dev/null 2>&1; then
+    ui_ok "Настройки sysctl применены."
+  else
+    ui_warn "Некоторые параметры не применились."
+    sudo sysctl -p "$sysctl_file" 2>&1 | grep -Ei "error|invalid" || true
+  fi
+
+  ui_info "Настраиваю лимиты: ${limits_file}"
+  sudo tee "$limits_file" >/dev/null <<'EOF'
+# Remnawave File Limits
+* soft nofile 1048576
+* hard nofile 1048576
+* soft nproc 65535
+* hard nproc 65535
+root soft nofile 1048576
+root hard nofile 1048576
+root soft nproc 65535
+root hard nproc 65535
+EOF
+  ui_ok "Лимиты файлов настроены."
+
+  ui_info "Настраиваю systemd лимиты: ${systemd_conf_file}"
+  sudo mkdir -p "$systemd_conf_dir"
+  sudo tee "$systemd_conf_file" >/dev/null <<'EOF'
+[Manager]
+DefaultLimitNOFILE=1048576
+DefaultLimitNPROC=65535
+EOF
+  sudo systemctl daemon-reexec 2>/dev/null || true
+  ui_ok "Systemd лимиты настроены."
+
+  echo
+  ui_info "Проверка применённых параметров:"
+  ui_kv "BBR" "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo "unknown")"
+  ui_kv "IP Forward" "$(sysctl -n net.ipv4.ip_forward 2>/dev/null || echo "unknown")"
+  ui_kv "TCP FastOpen" "$(sysctl -n net.ipv4.tcp_fastopen 2>/dev/null || echo "unknown")"
+  ui_kv "File Max" "$(sysctl -n fs.file-max 2>/dev/null || echo "unknown")"
+  ui_kv "Somaxconn" "$(sysctl -n net.core.somaxconn 2>/dev/null || echo "unknown")"
+  echo
+  ui_warn "Для полного применения лимитов рекомендуется перезагрузка."
+  ui_pause
 }
 
 rn_status() {
@@ -499,6 +705,7 @@ plugin_remnanode_menu() {
     echo "3) Установить/настроить RemnaNode (SECRET_KEY, NODE_PORT=${RN_DEFAULT_NODE_PORT})"
     echo "4) Установить/настроить Caddy selfsteal (DNS-check, cert, порт=${RN_DEFAULT_SELFSTEAL_PORT})"
     echo "5) Статус RemnaNode/Caddy"
+    echo "6) Сетевые настройки (BBR/TCP tuning/лимиты)"
     ui_menu_back_item
     echo
     c="$(ui_read_choice "Выбор")"
@@ -508,6 +715,7 @@ plugin_remnanode_menu() {
       3) rn_node_install_flow ;;
       4) rn_caddy_install_flow ;;
       5) rn_status ;;
+      6) rn_apply_network_tuning ;;
       0) return 0 ;;
       *) ui_warn "Неверный выбор."; ui_pause ;;
     esac
