@@ -7,20 +7,12 @@ BIN_LINK="/usr/local/bin/sys-tools"
 
 cmd_exists() { command -v "$1" >/dev/null 2>&1; }
 
-need_sudo() {
-  if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-    sudo -n true 2>/dev/null || true
-  fi
-}
-
 apt_install() {
   sudo apt-get update -y
   sudo apt-get install -y "$@"
 }
 
 main() {
-  need_sudo
-
   if ! cmd_exists apt-get; then
     echo "apt-get not found. This installer is for Ubuntu/Debian." >&2
     exit 1
@@ -40,6 +32,9 @@ main() {
     sudo chown -R "$USER":"$USER" "$INSTALL_DIR" 2>/dev/null || true
     git clone "$REPO_DEFAULT" "$INSTALL_DIR"
   fi
+
+  # Не считаем chmod (filemode) изменением — иначе обновления будут постоянно ругаться на 644/755
+  ( cd "$INSTALL_DIR" && git config core.filemode false )
 
   sudo chmod +x "${INSTALL_DIR}/toolbox.sh"
   sudo ln -sf "${INSTALL_DIR}/toolbox.sh" "${BIN_LINK}"
