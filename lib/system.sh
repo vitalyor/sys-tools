@@ -27,7 +27,24 @@ sys_os_pretty() {
 }
 
 sys_public_ip() {
-  curl -fsS ifconfig.me 2>/dev/null || echo "N/A"
+  local ip=""
+  local url
+  local -a providers=(
+    "https://api.ipify.org"
+    "https://ifconfig.me/ip"
+    "https://icanhazip.com"
+    "https://checkip.amazonaws.com"
+  )
+
+  for url in "${providers[@]}"; do
+    ip="$(curl -fsS --connect-timeout 2 --max-time 4 "$url" 2>/dev/null | tr -d '\r\n ' || true)"
+    if [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || [[ "$ip" =~ ^[0-9A-Fa-f:]+$ && "$ip" == *:* ]]; then
+      echo "$ip"
+      return 0
+    fi
+  done
+
+  echo "N/A"
 }
 
 sys_default_iface() {
