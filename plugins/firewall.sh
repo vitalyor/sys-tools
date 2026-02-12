@@ -122,14 +122,14 @@ plugin_firewall_menu() {
     read -rp "Выбор: " c || true
 
     case "${c:-}" in
-      1) fw_install ;;
-      2) fw_status ;;
+      1) firewall_install_ufw ;;
+      2) firewall_status ;;
       3) fw_show_rules ;;
-      4) fw_enable_basic ;;
-      5) fw_add_rule ;;
-      6) fw_delete_rule ;;
-      7) fw_list_ports ;;
-      8) fw_ssh_audit ;;
+      4) firewall_enable_basic ;;
+      5) firewall_allow_rule ;;
+      6) firewall_delete_rule ;;
+      7) firewall_listening_ports ;;
+      8) ssh_audit_top_ips ;;
       0) return 0 ;;
       *) ui_warn "Неверный выбор."; ui_pause ;;
     esac
