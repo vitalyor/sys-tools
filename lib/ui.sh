@@ -11,9 +11,7 @@ ui_warn()  { echo -e "${YELLOW}⚠ $1${RESET}"; }
 ui_fail()  { echo -e "${RED}✘ $1${RESET}"; }
 ui_info()  { echo -e "${CYAN}• $1${RESET}"; }
 
-ui_kv() {
-  printf "%-14s: %s\n" "$1" "$2"
-}
+ui_kv() { printf "%-14s: %s\n" "$1" "$2"; }
 
 ui_clear() { clear 2>/dev/null || true; }
 
