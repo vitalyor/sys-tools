@@ -159,9 +159,9 @@ plugin_fail2ban_menu() {
     echo "2) Настроить SAFE (не перезаписывать существующий конфиг)"
     echo "3) Настроить FORCE (перезаписать sshd.local + бэкап)"
     echo "4) Показать отчёт/статистику"
-    echo "0) Назад"
+    ui_menu_back_item
     echo
-    read -rp "Выбор: " c || true
+    c="$(ui_read_choice "Выбор")"
     case "${c:-}" in
       1) f2b_install ;;
       2) f2b_config_safe ;;

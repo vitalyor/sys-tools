@@ -62,9 +62,9 @@ main_menu() {
     echo "5) RemnaNode (Docker + Xray-core + DNS-check + Caddy selfsteal)"
     echo "8) Обновить sys-tools из репозитория"
     echo "9) О программе / версия / инфо о системе"
-    echo "0) Выход"
+    echo "0) Выход (или q)"
     echo
-    read -rp "Выбор: " c || true
+    c="$(ui_read_choice "Выбор")"
 
     case "${c:-}" in
       1) plugin_fail2ban_menu ;;

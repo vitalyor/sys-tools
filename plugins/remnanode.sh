@@ -499,9 +499,9 @@ plugin_remnanode_menu() {
     echo "3) Установить/настроить RemnaNode (SECRET_KEY, NODE_PORT=${RN_DEFAULT_NODE_PORT})"
     echo "4) Установить/настроить Caddy selfsteal (DNS-check, cert, порт=${RN_DEFAULT_SELFSTEAL_PORT})"
     echo "5) Статус RemnaNode/Caddy"
-    echo "0) Назад"
+    ui_menu_back_item
     echo
-    read -rp "Выбор: " c || true
+    c="$(ui_read_choice "Выбор")"
     case "${c:-}" in
       1) rn_install_docker ;;
       2) rn_install_xray_core ;;

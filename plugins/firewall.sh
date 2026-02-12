@@ -117,9 +117,9 @@ plugin_firewall_menu() {
     echo "6) Удалить правило по номеру"
     echo "7) Показать слушающие порты (ss)"
     echo "8) SSH audit: топ атакующих IP"
-    echo "0) Назад"
+    ui_menu_back_item
     echo
-    read -rp "Выбор: " c || true
+    c="$(ui_read_choice "Выбор")"
 
     case "${c:-}" in
       1) firewall_install_ufw ;;

@@ -52,3 +52,26 @@ ui_input() {
     echo "$ans"
   fi
 }
+
+ui_trim() {
+  local s="${1:-}"
+  s="${s#"${s%%[![:space:]]*}"}"
+  s="${s%"${s##*[![:space:]]}"}"
+  echo "$s"
+}
+
+ui_read_choice() {
+  local prompt="${1:-Выбор}"
+  local ans=""
+  read -rp "${prompt}: " ans || true
+  ans="$(ui_trim "$ans")"
+  ans="$(printf "%s" "$ans" | tr '[:upper:]' '[:lower:]')"
+  case "$ans" in
+    q|quit|exit|back|назад) echo "0" ;;
+    *) echo "$ans" ;;
+  esac
+}
+
+ui_menu_back_item() {
+  echo "0) Назад (или q)"
+}

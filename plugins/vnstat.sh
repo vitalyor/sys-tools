@@ -82,26 +82,35 @@ vnstat_init_iface() {
 }
 
 vnstat_stats() {
-  ui_h1 "vnStat — статистика"
+  local c
   vnstat_installed || { ui_warn "vnStat не установлен."; ui_pause; return 0; }
 
-  echo "1) Сутки (-d)"
-  echo "2) Месяц (-m)"
-  echo "3) По часам (-h)"
-  echo "4) По интерфейсам (vnstat --iflist)"
-  echo "0) Назад"
-  echo
-  read -rp "Выбор: " c || true
+  while true; do
+    ui_clear
+    ui_h1 "vnStat — статистика"
+    echo "1) Сутки (-d)"
+    echo "2) Месяц (-m)"
+    echo "3) По часам (-h)"
+    echo "4) По интерфейсам (--iflist)"
+    echo "5) Live мониторинг (vnstat -l, выход Ctrl+C)"
+    echo "6) Тест-срез скорости за 5 сек (vnstat -tr 5)"
+    echo "7) Краткий отчёт (vnstat --oneline)"
+    ui_menu_back_item
+    echo
+    c="$(ui_read_choice "Выбор")"
 
-  case "${c:-}" in
-    1) vnstat -d || true ;;
-    2) vnstat -m || true ;;
-    3) vnstat -h || true ;;
-    4) vnstat --iflist || true ;;
-    0) return 0 ;;
-    *) ui_warn "Неверный выбор." ;;
-  esac
-  ui_pause
+    case "${c:-}" in
+      1) vnstat -d || true; ui_pause ;;
+      2) vnstat -m || true; ui_pause ;;
+      3) vnstat -h || true; ui_pause ;;
+      4) vnstat --iflist || true; ui_pause ;;
+      5) ui_info "Запускаю live. Для возврата в меню нажми Ctrl+C."; vnstat -l || true; ui_pause ;;
+      6) vnstat -tr 5 || true; ui_pause ;;
+      7) vnstat --oneline || true; ui_pause ;;
+      0) return 0 ;;
+      *) ui_warn "Неверный выбор."; ui_pause ;;
+    esac
+  done
 }
 
 plugin_vnstat_menu() {
@@ -111,9 +120,9 @@ plugin_vnstat_menu() {
     echo "1) Установить vnStat"
     echo "2) Инициализировать интерфейс (важно!)"
     echo "3) Показать статистику"
-    echo "0) Назад"
+    ui_menu_back_item
     echo
-    read -rp "Выбор: " c || true
+    c="$(ui_read_choice "Выбор")"
     case "${c:-}" in
       1) vnstat_install ;;
       2) vnstat_init_iface ;;

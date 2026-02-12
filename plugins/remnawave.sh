@@ -39,9 +39,9 @@ plugin_remnawave_menu() {
     echo "1) Обновить Panel (/opt/remnawave)"
     echo "2) Обновить Node  (/opt/remnanode)"
     echo "3) Обновить Subpage (/opt/remnawave/subscription)"
-    echo "0) Назад"
+    ui_menu_back_item
     echo
-    read -rp "Выбор: " c || true
+    c="$(ui_read_choice "Выбор")"
     case "${c:-}" in
       1) rw_update_panel ;;
       2) rw_update_node ;;

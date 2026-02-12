@@ -77,6 +77,7 @@ sys_tools_auto_update_on_start() {
 
 sys_tools_update_menu() {
   local root_dir="$1"
+  local upstream_ref=""
 
   ui_h1 "Обновление sys-tools"
   if [[ ! -d "${root_dir}/.git" ]]; then
@@ -87,6 +88,8 @@ sys_tools_update_menu() {
   fi
 
   ui_info "Текущая директория: ${root_dir}"
+  upstream_ref="$(cd "$root_dir" && git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2>/dev/null || true)"
+  [[ -z "$upstream_ref" ]] && upstream_ref="origin/main"
 
   # Проверяем грязное дерево
   local dirty=""
@@ -98,10 +101,10 @@ sys_tools_update_menu() {
     ui_info "Варианты:"
     echo "1) Stash изменения → pull --rebase → stash pop (сохранить изменения)"
     echo "2) Сбросить изменения (reset --hard + clean -fd) → pull (УДАЛИТ всё локальное)"
-    echo "0) Отмена"
+    echo "0) Отмена (или q)"
     echo
     local c
-    read -rp "Выбор: " c || true
+    c="$(ui_read_choice "Выбор")"
 
     case "${c:-}" in
       1)
@@ -122,8 +125,8 @@ sys_tools_update_menu() {
 
         ui_info "Шаг 1/3: fetch..."
         ( cd "$root_dir" && git fetch --all )
-        ui_info "Шаг 2/3: reset --hard origin/main..."
-        ( cd "$root_dir" && git reset --hard origin/main )
+        ui_info "Шаг 2/3: reset --hard ${upstream_ref}..."
+        ( cd "$root_dir" && git reset --hard "$upstream_ref" )
         ui_info "Шаг 3/3: clean -fd..."
         ( cd "$root_dir" && git clean -fd )
 
