@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# libs
 # shellcheck source=lib/ui.sh
 source "${ROOT_DIR}/lib/ui.sh"
 # shellcheck source=lib/system.sh
@@ -23,8 +24,7 @@ source "${ROOT_DIR}/plugins/remnawave.sh"
 source "${ROOT_DIR}/plugins/remnanode.sh"
 
 TOOL_NAME="sys-tools"
-VERSION_FILE="${ROOT_DIR}/VERSION"
-TOOL_VERSION="$(cat "${VERSION_FILE}" 2>/dev/null || echo "unknown")"
+TOOL_VERSION="$(cat "${ROOT_DIR}/VERSION" 2>/dev/null || echo "unknown")"
 
 about() {
   ui_h1 "О программе"
@@ -49,7 +49,7 @@ main_menu() {
     echo "2) vnStat (учёт трафика / статистика)"
     echo "3) Firewall / Ports (UFW / слушающие порты / аудит ssh)"
     echo "4) RemnaWave (обновить panel/node/subpage)"
-    echo "5) Установка RemnaNode (Xray-core + DNS-check + Caddy selfsteal)"
+    echo "5) RemnaNode (Docker + Xray-core + DNS-check + Caddy selfsteal)"
     echo "8) Обновить sys-tools из репозитория"
     echo "9) О программе / версия / инфо о системе"
     echo "0) Выход"
