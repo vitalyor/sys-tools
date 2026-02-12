@@ -144,10 +144,14 @@ fw_show_rules() {
     return 0
   fi
 
+  local rules_output
   echo
-  sudo ufw status verbose || true
-  echo
-  sudo ufw status numbered || true
+  rules_output="$(sudo ufw status numbered 2>&1 || true)"
+  echo "$rules_output"
+  if [[ "$rules_output" == *"Status: inactive"* ]]; then
+    echo
+    ui_info "UFW не активен. После включения здесь появятся правила."
+  fi
 
   ui_pause
 }
