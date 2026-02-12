@@ -15,7 +15,11 @@ vnstat_install() {
 vnstat_init_iface() {
   ui_h1 "vnStat — инициализация интерфейса"
   sys_need_sudo
-  vnstat_installed || { ui_warn "vnStat не установлен."; ui_confirm "Установить?" "Y" && vnstat_install || { ui_pause; return 0; }; }
+
+  vnstat_installed || {
+    ui_warn "vnStat не установлен."
+    ui_confirm "Установить?" "Y" && vnstat_install || { ui_pause; return 0; }
+  }
 
   local def_if
   def_if="$(sys_default_iface)"
@@ -28,11 +32,23 @@ vnstat_init_iface() {
   local iface
   iface="$(ui_input "Какой интерфейс учитывать в vnStat?" "$def_if")"
 
-  ui_info "Инициализация базы: vnstat -u -i ${iface}"
-  sudo vnstat -u -i "$iface"
-  ui_ok "Готово."
+  local version
+  version="$(vnstat --version | head -n1 | awk '{print $2}')"
 
-  ui_info "Проверка:"
+  ui_info "Версия vnStat: $version"
+
+  if vnstat --help 2>&1 | grep -q -- '--add'; then
+    ui_info "Использую новый синтаксис: vnstat --add -i ${iface}"
+    sudo vnstat --add -i "$iface" || true
+  else
+    ui_info "Использую старый синтаксис: vnstat -u -i ${iface}"
+    sudo vnstat -u -i "$iface" || true
+  fi
+
+  sudo systemctl enable --now vnstat >/dev/null 2>&1 || true
+
+  ui_ok "Инициализация завершена."
+  echo
   vnstat --oneline 2>/dev/null || true
 
   ui_pause
