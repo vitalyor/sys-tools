@@ -3,6 +3,14 @@ set -euo pipefail
 
 vnstat_installed() { sys_cmd_exists vnstat; }
 
+vnstat_version() {
+  vnstat --version 2>/dev/null | head -n1 | awk '{print $2}' || echo "0.0"
+}
+
+vnstat_major() {
+  vnstat_version | cut -d. -f1 | tr -cd '0-9' || echo "0"
+}
+
 vnstat_install() {
   ui_h1 "vnStat — установка"
   if vnstat_installed; then ui_ok "vnStat уже установлен."; ui_pause; return 0; fi
@@ -28,18 +36,22 @@ vnstat_init_iface() {
   ui_info "Сетевые интерфейсы:"
   ip -o link show | awk -F': ' '{print " - " $2}' | sed 's/@.*//' || true
   echo
+  ui_info "Подсказка: интерфейс по default route:"
+  ip route | awk '/default/ {print " - " $5; exit}' || true
+  echo
 
   local iface
   iface="$(ui_input "Какой интерфейс учитывать в vnStat?" "$def_if")"
 
-  local version
-  version="$(vnstat --version 2>/dev/null | head -n1 | awk '{print $2}' || true)"
-  [[ -z "$version" ]] && version="unknown"
-  ui_info "Версия vnStat: ${version}"
+  local ver maj
+  ver="$(vnstat_version)"
+  maj="$(vnstat_major)"
 
-  # vnStat 2.x: вместо -u используется --add
-  if vnstat --help 2>&1 | grep -q -- '--add'; then
+  ui_info "Версия vnStat: ${ver}"
+
+  if [[ "$maj" =~ ^[0-9]+$ ]] && (( maj >= 2 )); then
     ui_info "Инициализация (vnStat 2.x): vnstat --add -i ${iface}"
+    # если интерфейс уже есть — vnstat вернёт ошибку, это не критично
     sudo vnstat --add -i "$iface" || true
   else
     ui_info "Инициализация (vnStat 1.x): vnstat -u -i ${iface}"
@@ -47,10 +59,16 @@ vnstat_init_iface() {
   fi
 
   sudo systemctl enable --now vnstat >/dev/null 2>&1 || true
+  sudo systemctl restart vnstat >/dev/null 2>&1 || true
 
   ui_ok "Инициализация завершена."
   echo
+  ui_info "Список интерфейсов vnStat:"
+  vnstat --iflist 2>/dev/null || true
+  echo
+  ui_info "Oneline:"
   vnstat --oneline 2>/dev/null || true
+
   ui_pause
 }
 
