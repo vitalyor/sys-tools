@@ -73,15 +73,45 @@ firewall_delete_rule() {
   ui_info "Текущие правила (numbered):"
   sudo ufw status numbered || true
   echo
-  local n
-  n="$(ui_input "Номер правила для удаления" "")"
-  if ! [[ "$n" =~ ^[0-9]+$ ]]; then
-    ui_fail "Номер должен быть числом."
+
+  local raw token
+  local -a nums=()
+  raw="$(ui_input "Номер(а) для удаления (пример: 1,2,5 или 1 2 5)" "")"
+  raw="${raw//,/ }"
+
+  for token in $raw; do
+    if [[ "$token" =~ ^[0-9]+$ ]] && (( token > 0 )); then
+      nums+=("$token")
+    else
+      ui_fail "Некорректный номер: ${token}"
+      ui_pause
+      return 1
+    fi
+  done
+
+  if (( ${#nums[@]} == 0 )); then
+    ui_warn "Нужно указать минимум один номер."
     ui_pause
     return 1
   fi
-  sudo ufw delete "$n" || true
-  ui_ok "Правило удалено."
+
+  mapfile -t nums < <(printf "%s\n" "${nums[@]}" | sort -nru)
+
+  local n ok=0 fail=0
+  for n in "${nums[@]}"; do
+    if sudo ufw --force delete "$n" >/dev/null 2>&1; then
+      ui_ok "Удалено правило #${n}"
+      ((ok++))
+    else
+      ui_warn "Не удалось удалить правило #${n}"
+      ((fail++))
+    fi
+  done
+
+  echo
+  ui_info "Итог: удалено ${ok}, ошибок ${fail}"
+  ui_info "Оставшиеся правила:"
+  sudo ufw status numbered || true
   ui_pause
 }
 
