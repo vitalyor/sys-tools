@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+sys_tools_restart_now() {
+  local root_dir="$1"
+  ui_info "Перезапускаю sys-tools, чтобы применились обновления..."
+  ui_pause
+
+  if [[ -n "${SYS_TOOLS_ENTRY:-}" && -f "${SYS_TOOLS_ENTRY}" ]]; then
+    exec bash "${SYS_TOOLS_ENTRY}"
+  fi
+
+  exec bash "${root_dir}/toolbox.sh"
+}
+
 sys_tools_update_menu() {
   local root_dir="$1"
 
@@ -49,6 +61,7 @@ sys_tools_update_menu() {
         ( cd "$root_dir" && git clean -fd )
         ( cd "$root_dir" && git pull --rebase )
         ui_ok "Сброшено и обновлено."
+        sys_tools_restart_now "$root_dir"
         ui_pause
         return 0
         ;;

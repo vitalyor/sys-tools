@@ -10,6 +10,9 @@ while [ -h "$SOURCE" ]; do
 done
 ROOT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 
+SYS_TOOLS_ENTRY="$SOURCE"
+export SYS_TOOLS_ENTRY
+
 # libs
 # shellcheck source=lib/ui.sh
 source "${ROOT_DIR}/lib/ui.sh"
