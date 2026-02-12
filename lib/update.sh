@@ -5,7 +5,6 @@ sys_tools_restart_now() {
   local root_dir="$1"
 
   ui_info "Применяю обновления: делаю перезапуск sys-tools..."
-  ui_pause
 
   # Сначала пытаемся перезапуститься тем же entrypoint, которым запустились (если передан из toolbox.sh)
   if [[ -n "${SYS_TOOLS_ENTRY:-}" && -f "${SYS_TOOLS_ENTRY}" ]]; then
