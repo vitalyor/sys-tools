@@ -101,10 +101,10 @@ firewall_delete_rule() {
   for n in "${nums[@]}"; do
     if sudo ufw --force delete "$n" >/dev/null 2>&1; then
       ui_ok "Удалено правило #${n}"
-      ((ok++))
+      ok=$((ok + 1))
     else
       ui_warn "Не удалось удалить правило #${n}"
-      ((fail++))
+      fail=$((fail + 1))
     fi
   done
 
