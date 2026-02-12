@@ -32,7 +32,7 @@ firewall_enable_basic() {
   local ssh_port
   ssh_port="$(ui_input "Какой порт SSH разрешить ДО включения firewall?" "$(sys_detect_ssh_port)")"
 
-  ui_warn "Если ты ошибёшься с SSH портом — можешь потерять доступ."
+  ui_warn "Если ошибёшься с SSH портом — можешь потерять доступ."
   ui_confirm "Продолжить?" "N" || { ui_info "Отменено."; ui_pause; return 0; }
 
   sudo ufw allow "${ssh_port}/tcp" || true
@@ -97,7 +97,6 @@ ssh_audit_top_ips() {
   unit="$(sys_detect_ssh_unit)"
   ui_info "Использую systemd unit: ${unit}"
 
-  # Считаем IP именно из "from x.x.x.x"
   sudo journalctl -u "$unit" --no-pager -n 3000 2>/dev/null \
     | grep -E "Failed password|Invalid user" \
     | grep -oE 'from ([0-9]{1,3}\.){3}[0-9]{1,3}' \
