@@ -19,8 +19,8 @@ source "${ROOT_DIR}/plugins/vnstat.sh"
 source "${ROOT_DIR}/plugins/firewall.sh"
 # shellcheck source=plugins/remnawave.sh
 source "${ROOT_DIR}/plugins/remnawave.sh"
-# shellcheck source=plugins/remnanode_install.sh
-source "${ROOT_DIR}/plugins/remnanode_install.sh"
+# shellcheck source=plugins/remnanode.sh
+source "${ROOT_DIR}/plugins/remnanode.sh"
 
 TOOL_NAME="sys-tools"
 VERSION_FILE="${ROOT_DIR}/VERSION"
@@ -49,7 +49,7 @@ main_menu() {
     echo "2) vnStat (учёт трафика / статистика)"
     echo "3) Firewall / Ports (UFW / слушающие порты / аудит ssh)"
     echo "4) RemnaWave (обновить panel/node/subpage)"
-    echo "5) RemnaNode Install (обёртка под установщик)"
+    echo "5) Установка RemnaNode (Xray-core + DNS-check + Caddy selfsteal)"
     echo "8) Обновить sys-tools из репозитория"
     echo "9) О программе / версия / инфо о системе"
     echo "0) Выход"
@@ -61,7 +61,7 @@ main_menu() {
       2) plugin_vnstat_menu ;;
       3) plugin_firewall_menu ;;
       4) plugin_remnawave_menu ;;
-      5) plugin_remnanode_install_menu ;;
+      5) plugin_remnanode_menu ;;
       8) sys_tools_update_menu "${ROOT_DIR}" ;;
       9) about ;;
       0) exit 0 ;;
