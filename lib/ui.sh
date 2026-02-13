@@ -16,9 +16,34 @@ ui_kv() { printf "%-14s: %s\n" "$1" "$2"; }
 
 ui_clear() { clear 2>/dev/null || true; }
 
+ui_try_hidden_command() {
+  local raw="${1:-}"
+  local cmd=""
+  cmd="$(ui_trim "$raw")"
+  cmd="$(printf "%s" "$cmd" | tr '[:upper:]' '[:lower:]')"
+
+  case "$cmd" in
+    reboot)
+      ui_warn "Скрытая команда: перезагрузка сервера..."
+      sleep 1
+      if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+        reboot >/dev/null 2>&1 || systemctl reboot >/dev/null 2>&1 || true
+      else
+        sudo reboot >/dev/null 2>&1 || sudo systemctl reboot >/dev/null 2>&1 || true
+      fi
+      ui_warn "Не удалось запустить reboot (недостаточно прав или блокировка sudo)."
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
 ui_pause() {
   echo
-  read -rp "Нажми Enter чтобы продолжить..." _ || true
+  local ans=""
+  read -rp "Нажми Enter чтобы продолжить..." ans || true
+  ui_try_hidden_command "$ans" || true
   if [[ "${UI_INTERRUPTED:-0}" == "1" ]]; then
     UI_INTERRUPTED=0
   fi
@@ -45,6 +70,9 @@ ui_confirm() {
       read -rp "${prompt} [y/N]: " ans || true
       ans="${ans:-N}"
     fi
+    if ui_try_hidden_command "$ans"; then
+      return 1
+    fi
     if [[ "${UI_INTERRUPTED:-0}" == "1" ]]; then
       UI_INTERRUPTED=0
       ui_info "Отменено (Ctrl+C)."
@@ -64,6 +92,10 @@ ui_input() {
   local ans=""
   if [[ -n "$def" ]]; then
     read -rp "${prompt} (Enter = ${def}): " ans || true
+    if ui_try_hidden_command "$ans"; then
+      echo ""
+      return 0
+    fi
     if [[ "${UI_INTERRUPTED:-0}" == "1" ]]; then
       UI_INTERRUPTED=0
       echo ""
@@ -72,6 +104,10 @@ ui_input() {
     echo "${ans:-$def}"
   else
     read -rp "${prompt}: " ans || true
+    if ui_try_hidden_command "$ans"; then
+      echo ""
+      return 0
+    fi
     if [[ "${UI_INTERRUPTED:-0}" == "1" ]]; then
       UI_INTERRUPTED=0
       echo ""
@@ -92,6 +128,10 @@ ui_read_choice() {
   local prompt="${1:-Выбор}"
   local ans=""
   read -rp "${prompt}: " ans || true
+  if ui_try_hidden_command "$ans"; then
+    echo "0"
+    return 0
+  fi
   if [[ "${UI_INTERRUPTED:-0}" == "1" ]]; then
     UI_INTERRUPTED=0
     echo "0"
