@@ -825,6 +825,19 @@ rn_verify_network_tuning() {
     warn=$((warn + 1))
   fi
 
+  local icmp_echo_ignore=""
+  icmp_echo_ignore="$(sysctl -n net.ipv4.icmp_echo_ignore_all 2>/dev/null || echo "unknown")"
+  if [[ "$icmp_echo_ignore" == "1" ]]; then
+    ui_ok "ICMP echo скрыт (icmp_echo_ignore_all = 1)"
+    ok=$((ok + 1))
+  elif [[ "$icmp_echo_ignore" == "0" ]]; then
+    ui_warn "ICMP echo разрешён (icmp_echo_ignore_all = 0) — ping будет идти"
+    warn=$((warn + 1))
+  else
+    ui_warn "ICMP echo статус неизвестен (icmp_echo_ignore_all = ${icmp_echo_ignore})"
+    warn=$((warn + 1))
+  fi
+
   echo
   ui_info "Итог проверки: OK=${ok}, WARN=${warn}"
 }
