@@ -710,10 +710,8 @@ EOF
   sudo tee "$tuning_service_file" >/dev/null <<EOF
 [Unit]
 Description=Remnawave persistent sysctl tuning
-DefaultDependencies=no
-After=systemd-modules-load.service local-fs.target
-Before=network-pre.target
-Wants=systemd-modules-load.service
+After=systemd-modules-load.service systemd-sysctl.service network-online.target
+Wants=systemd-modules-load.service network-online.target
 
 [Service]
 Type=oneshot
@@ -827,6 +825,8 @@ rn_verify_network_tuning() {
 
   local icmp_echo_ignore=""
   icmp_echo_ignore="$(sysctl -n net.ipv4.icmp_echo_ignore_all 2>/dev/null || echo "unknown")"
+  local icmp_in_cfg=""
+  icmp_in_cfg="$(sudo awk -F= '/^\s*net\.ipv4\.icmp_echo_ignore_all\s*=/{gsub(/[[:space:]]/,"",$2); v=$2} END{if(v=="") print "not_set"; else print v}' "$sysctl_file" 2>/dev/null || echo "unknown")"
   if [[ "$icmp_echo_ignore" == "1" ]]; then
     ui_ok "ICMP echo скрыт (icmp_echo_ignore_all = 1)"
     ok=$((ok + 1))
@@ -835,6 +835,14 @@ rn_verify_network_tuning() {
     warn=$((warn + 1))
   else
     ui_warn "ICMP echo статус неизвестен (icmp_echo_ignore_all = ${icmp_echo_ignore})"
+    warn=$((warn + 1))
+  fi
+
+  if [[ "$icmp_in_cfg" == "1" || "$icmp_in_cfg" == "0" ]]; then
+    ui_ok "ICMP параметр в конфиге: ${icmp_in_cfg}"
+    ok=$((ok + 1))
+  else
+    ui_warn "ICMP параметр в конфиге не зафиксирован (icmp_echo_ignore_all)"
     warn=$((warn + 1))
   fi
 
