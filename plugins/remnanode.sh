@@ -568,8 +568,10 @@ rn_apply_network_tuning() {
 
   local sysctl_file="/etc/sysctl.d/99-remnawave-tuning.conf"
   local limits_file="/etc/security/limits.d/99-remnawave.conf"
+  local modules_file="/etc/modules-load.d/99-remnawave.conf"
   local systemd_conf_dir="/etc/systemd/system.conf.d"
   local systemd_conf_file="${systemd_conf_dir}/99-remnawave.conf"
+  local tuning_service_file="/etc/systemd/system/remnawave-tuning.service"
   local icmp_mode=""
 
   if sudo test -f "$sysctl_file" 2>/dev/null; then
@@ -664,6 +666,12 @@ EOF
       ;;
   esac
 
+  ui_info "Настраиваю автозагрузку модуля BBR: ${modules_file}"
+  sudo tee "$modules_file" >/dev/null <<'EOF'
+tcp_bbr
+EOF
+  sudo systemctl restart systemd-modules-load 2>/dev/null || true
+
   ui_ok "Конфигурация создана: ${sysctl_file}"
 
   ui_info "Применяю sysctl..."
@@ -698,6 +706,28 @@ EOF
   sudo systemctl daemon-reexec 2>/dev/null || true
   ui_ok "Systemd лимиты настроены."
 
+  ui_info "Создаю сервис персистентного применения тюнинга: ${tuning_service_file}"
+  sudo tee "$tuning_service_file" >/dev/null <<EOF
+[Unit]
+Description=Remnawave persistent sysctl tuning
+DefaultDependencies=no
+After=systemd-modules-load.service local-fs.target
+Before=network-pre.target
+Wants=systemd-modules-load.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/sysctl -p ${sysctl_file}
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  sudo systemctl daemon-reload
+  sudo systemctl enable remnawave-tuning.service >/dev/null 2>&1 || true
+  sudo systemctl start remnawave-tuning.service >/dev/null 2>&1 || true
+  ui_ok "Boot-сервис тюнинга включён."
+
   echo
   ui_info "Проверка применённых параметров:"
   ui_kv "BBR" "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo "unknown")"
@@ -706,9 +736,97 @@ EOF
   ui_kv "File Max" "$(sysctl -n fs.file-max 2>/dev/null || echo "unknown")"
   ui_kv "Somaxconn" "$(sysctl -n net.core.somaxconn 2>/dev/null || echo "unknown")"
   ui_kv "ICMP Echo Ignore" "$(sysctl -n net.ipv4.icmp_echo_ignore_all 2>/dev/null || echo "default")"
+  ui_kv "BBR Module" "$(lsmod | awk '$1=="tcp_bbr"{print "loaded"; found=1} END{if(!found) print "not loaded"}' 2>/dev/null || echo "unknown")"
+  ui_kv "Tune Service" "$(systemctl is-enabled remnawave-tuning.service 2>/dev/null || echo "unknown")"
+  echo
+  rn_verify_network_tuning "$sysctl_file" "$modules_file" "$tuning_service_file"
   echo
   ui_warn "Для полного применения лимитов рекомендуется перезагрузка."
   ui_pause
+}
+
+rn_verify_network_tuning() {
+  local sysctl_file="$1"
+  local modules_file="$2"
+  local service_file="$3"
+  local ok=0 warn=0
+
+  ui_h1 "Проверка тюнинга"
+
+  if sudo test -f "$sysctl_file" 2>/dev/null; then
+    ui_ok "Есть sysctl конфиг: ${sysctl_file}"
+    ok=$((ok + 1))
+  else
+    ui_warn "Нет sysctl конфига: ${sysctl_file}"
+    warn=$((warn + 1))
+  fi
+
+  if sudo test -f "$modules_file" 2>/dev/null && sudo grep -qx "tcp_bbr" "$modules_file" 2>/dev/null; then
+    ui_ok "Автозагрузка BBR настроена: ${modules_file}"
+    ok=$((ok + 1))
+  else
+    ui_warn "Автозагрузка BBR не настроена: ${modules_file}"
+    warn=$((warn + 1))
+  fi
+
+  if sudo test -f "$service_file" 2>/dev/null; then
+    ui_ok "Есть boot-сервис: ${service_file}"
+    ok=$((ok + 1))
+  else
+    ui_warn "Нет boot-сервиса: ${service_file}"
+    warn=$((warn + 1))
+  fi
+
+  if systemctl is-enabled remnawave-tuning.service >/dev/null 2>&1; then
+    ui_ok "Сервис включён в автозапуск."
+    ok=$((ok + 1))
+  else
+    ui_warn "Сервис не включён в автозапуск."
+    warn=$((warn + 1))
+  fi
+
+  if systemctl is-active remnawave-tuning.service >/dev/null 2>&1; then
+    ui_ok "Сервис активен."
+    ok=$((ok + 1))
+  else
+    ui_warn "Сервис не активен."
+    warn=$((warn + 1))
+  fi
+
+  if lsmod | grep -q "^tcp_bbr" 2>/dev/null; then
+    ui_ok "Модуль tcp_bbr загружен."
+    ok=$((ok + 1))
+  else
+    ui_warn "Модуль tcp_bbr не загружен."
+    warn=$((warn + 1))
+  fi
+
+  if [[ "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || true)" == "bbr" ]]; then
+    ui_ok "TCP congestion control = bbr"
+    ok=$((ok + 1))
+  else
+    ui_warn "TCP congestion control не bbr"
+    warn=$((warn + 1))
+  fi
+
+  if [[ "$(sysctl -n net.core.default_qdisc 2>/dev/null || true)" == "fq" ]]; then
+    ui_ok "default_qdisc = fq"
+    ok=$((ok + 1))
+  else
+    ui_warn "default_qdisc не fq"
+    warn=$((warn + 1))
+  fi
+
+  if [[ "$(sysctl -n net.ipv4.ip_forward 2>/dev/null || true)" == "1" ]]; then
+    ui_ok "ip_forward = 1"
+    ok=$((ok + 1))
+  else
+    ui_warn "ip_forward не включён"
+    warn=$((warn + 1))
+  fi
+
+  echo
+  ui_info "Итог проверки: OK=${ok}, WARN=${warn}"
 }
 
 rn_status() {
