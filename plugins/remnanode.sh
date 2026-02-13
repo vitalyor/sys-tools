@@ -829,6 +829,34 @@ rn_verify_network_tuning() {
   ui_info "Итог проверки: OK=${ok}, WARN=${warn}"
 }
 
+rn_check_network_tuning_status() {
+  local sysctl_file="/etc/sysctl.d/99-remnawave-tuning.conf"
+  local modules_file="/etc/modules-load.d/99-remnawave.conf"
+  local tuning_service_file="/etc/systemd/system/remnawave-tuning.service"
+
+  rn_verify_network_tuning "$sysctl_file" "$modules_file" "$tuning_service_file"
+  ui_pause
+}
+
+rn_network_tuning_menu() {
+  local c
+  while true; do
+    ui_clear
+    ui_h1 "RemnaNode — сетевой тюнинг"
+    echo "1) Применить сетевые настройки (BBR/TCP tuning/лимиты)"
+    echo "2) Проверить сетевой тюнинг (без изменений)"
+    ui_menu_back_item
+    echo
+    c="$(ui_read_choice "Выбор")"
+    case "${c:-}" in
+      1) rn_apply_network_tuning ;;
+      2) rn_check_network_tuning_status ;;
+      0) return 0 ;;
+      *) ui_warn "Неверный выбор."; ui_pause ;;
+    esac
+  done
+}
+
 rn_status() {
   ui_h1 "RemnaNode / Caddy — статус"
   sys_need_sudo
@@ -854,7 +882,7 @@ plugin_remnanode_menu() {
     echo "3) Установить/настроить RemnaNode (SECRET_KEY, NODE_PORT=${RN_DEFAULT_NODE_PORT})"
     echo "4) Установить/настроить Caddy selfsteal (DNS-check, cert, порт=${RN_DEFAULT_SELFSTEAL_PORT})"
     echo "5) Статус RemnaNode/Caddy"
-    echo "6) Сетевые настройки (BBR/TCP tuning/лимиты)"
+    echo "6) Сетевые настройки (применить/проверить)"
     ui_menu_back_item
     echo
     c="$(ui_read_choice "Выбор")"
@@ -864,7 +892,7 @@ plugin_remnanode_menu() {
       3) rn_node_install_flow ;;
       4) rn_caddy_install_flow ;;
       5) rn_status ;;
-      6) rn_apply_network_tuning ;;
+      6) rn_network_tuning_menu ;;
       0) return 0 ;;
       *) ui_warn "Неверный выбор."; ui_pause ;;
     esac
