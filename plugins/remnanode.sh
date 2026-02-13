@@ -570,11 +570,23 @@ rn_apply_network_tuning() {
   local limits_file="/etc/security/limits.d/99-remnawave.conf"
   local systemd_conf_dir="/etc/systemd/system.conf.d"
   local systemd_conf_file="${systemd_conf_dir}/99-remnawave.conf"
+  local icmp_mode=""
 
   if sudo test -f "$sysctl_file" 2>/dev/null; then
     ui_warn "Файл уже существует: ${sysctl_file}"
     ui_confirm "Перезаписать его?" "N" || { ui_info "Сетевые настройки не изменены."; ui_pause; return 0; }
   fi
+
+  echo
+  ui_info "Режим ICMP (ping):"
+  echo "1) Оставить по умолчанию (рекомендуется)"
+  echo "2) Скрыть узел от ping (icmp echo ignore)"
+  echo "3) Явно разрешить ответы на ping"
+  icmp_mode="$(ui_input "Выбор 1/2/3" "1")"
+  case "${icmp_mode:-}" in
+    1|2|3) ;;
+    *) ui_warn "Неверный выбор, использую режим 1."; icmp_mode="1" ;;
+  esac
 
   ui_info "Проверка поддержки BBR..."
   if ! grep -q "tcp_bbr" /proc/modules 2>/dev/null; then
@@ -634,6 +646,24 @@ fs.file-max = 2097152
 vm.swappiness = 10
 vm.overcommit_memory = 1
 EOF
+
+  case "$icmp_mode" in
+    2)
+      sudo tee -a "$sysctl_file" >/dev/null <<'EOF'
+
+# ICMP
+net.ipv4.icmp_echo_ignore_all = 1
+EOF
+      ;;
+    3)
+      sudo tee -a "$sysctl_file" >/dev/null <<'EOF'
+
+# ICMP
+net.ipv4.icmp_echo_ignore_all = 0
+EOF
+      ;;
+  esac
+
   ui_ok "Конфигурация создана: ${sysctl_file}"
 
   ui_info "Применяю sysctl..."
@@ -675,6 +705,7 @@ EOF
   ui_kv "TCP FastOpen" "$(sysctl -n net.ipv4.tcp_fastopen 2>/dev/null || echo "unknown")"
   ui_kv "File Max" "$(sysctl -n fs.file-max 2>/dev/null || echo "unknown")"
   ui_kv "Somaxconn" "$(sysctl -n net.core.somaxconn 2>/dev/null || echo "unknown")"
+  ui_kv "ICMP Echo Ignore" "$(sysctl -n net.ipv4.icmp_echo_ignore_all 2>/dev/null || echo "default")"
   echo
   ui_warn "Для полного применения лимитов рекомендуется перезагрузка."
   ui_pause
